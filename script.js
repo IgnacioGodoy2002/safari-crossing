@@ -126,7 +126,10 @@ const renderer = new THREE.WebGLRenderer({
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.setSize( window.innerWidth, window.innerHeight );
-document.body.appendChild( renderer.domElement );
+renderer.domElement.style.position = 'fixed';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.left = '0';
+document.body.insertBefore( renderer.domElement, document.body.firstChild );
 
 function Texture(width, height, rects) {
   const canvas = document.createElement( "canvas" );
@@ -424,31 +427,43 @@ document.querySelector("#retry").addEventListener("click", () => {
   endDOM.style.visibility = 'hidden';
 });
 
-document.getElementById('forward').addEventListener("click", () => move('forward'));
-
-document.getElementById('backward').addEventListener("click", () => move('backward'));
-
-document.getElementById('left').addEventListener("click", () => move('left'));
-
-document.getElementById('right').addEventListener("click", () => move('right'));
-
 window.addEventListener("keydown", event => {
-  if (event.keyCode == '38') {
-    // up arrow
-    move('forward');
+  if (event.keyCode == '38' || event.keyCode == '87') move('forward');   // ↑ / W
+  else if (event.keyCode == '40' || event.keyCode == '83') move('backward'); // ↓ / S
+  else if (event.keyCode == '37' || event.keyCode == '65') move('left');  // ← / A
+  else if (event.keyCode == '39' || event.keyCode == '68') move('right'); // → / D
+});
+
+// Touch controls: tap = forward, swipe left/right/down = directional
+let touchStartX = 0, touchStartY = 0;
+document.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  const minSwipe = 20;
+  if (Math.abs(dx) < minSwipe && Math.abs(dy) < minSwipe) {
+    move('forward'); // tap anywhere = forward
+    return;
   }
-  else if (event.keyCode == '40') {
-    // down arrow
-    move('backward');
+  if (Math.abs(dx) > Math.abs(dy)) {
+    move(dx > 0 ? 'right' : 'left');
+  } else {
+    move(dy < 0 ? 'forward' : 'backward');
   }
-  else if (event.keyCode == '37') {
-    // left arrow
-    move('left');
-  }
-  else if (event.keyCode == '39') {
-    // right arrow
-    move('right');
-  }
+}, { passive: true });
+
+// Responsive resize
+window.addEventListener('resize', () => {
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.left   = window.innerWidth  / -2;
+  camera.right  = window.innerWidth  /  2;
+  camera.top    = window.innerHeight /  2;
+  camera.bottom = window.innerHeight / -2;
+  camera.updateProjectionMatrix();
 });
 
 function move(direction) {

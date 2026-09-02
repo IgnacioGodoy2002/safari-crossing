@@ -1,69 +1,137 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Three.js Interface by Dannz</title>
-
-  <!-- Style -->
+  <title>Safari Crossing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
   <link rel="stylesheet" href="style.css" />
-
-  <!-- Three.js Library -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/99/three.min.js"></script>
 </head>
 <body>
 
-  <!-- Canvas for 3D rendering -->
-  <canvas id="c"></canvas>
+  <!-- Score counter (visible only while playing) -->
+  <div id="counter" style="display:none">0</div>
 
-  <!-- Counter Display -->
-  <div id="counter">0</div>
+  <!-- ── Menu overlay ── -->
+  <div id="menu">
+    <div class="menu-panel">
+      <div class="menu-title">
+        <span class="title-1">SAFARI</span>
+        <span class="title-2">CROSSING</span>
+      </div>
+      <p id="menu-sub" class="menu-sub"></p>
 
-  <!-- Control Buttons -->
-  <div id="controlls">
-    <div>
-      <button id="forward">
-        <svg width="30" height="30" viewBox="0 0 10 10">
-          <g transform="rotate(0, 5,5)">
-            <path d="M5,4 L7,6 L3,6 L5,4" />
-          </g>
-        </svg>
-      </button>
-      <button id="left">
-        <svg width="30" height="30" viewBox="0 0 10 10">
-          <g transform="rotate(-90, 5,5)">
-            <path d="M5,4 L7,6 L3,6 L5,4" />
-          </g>
-        </svg>
-      </button>
-      <button id="backward">
-        <svg width="30" height="30" viewBox="0 0 10 10">
-          <g transform="rotate(180, 5,5)">
-            <path d="M5,4 L7,6 L3,6 L5,4" />
-          </g>
-        </svg>
-      </button>
-      <button id="right">
-        <svg width="30" height="30" viewBox="0 0 10 10">
-          <g transform="rotate(90, 5,5)">
-            <path d="M5,4 L7,6 L3,6 L5,4" />
-          </g>
-        </svg>
-      </button>
+      <!-- Top 3 ranking -->
+      <div class="menu-top3">
+        <div class="top3-header">
+          <span id="menu-ranking-label" class="top3-title"></span>
+        </div>
+        <ol id="menu-top3-list" class="top3-list"></ol>
+      </div>
+
+      <button id="play-btn" class="btn-play"></button>
+
+      <div class="menu-secondary-btns">
+        <button id="btn-ranking" class="btn-secondary"></button>
+        <button id="btn-howto"   class="btn-secondary"></button>
+      </div>
+
+      <div id="sura-status" class="sura-status" style="display:none"></div>
+
+      <div class="lang-chips">
+        <button class="lang-chip" data-lang="es">ES</button>
+        <button class="lang-chip" data-lang="en">EN</button>
+        <button class="lang-chip" data-lang="pt">PT</button>
+      </div>
+
+      <div class="menu-version">v1.0.0</div>
     </div>
   </div>
 
-  <!-- End Game / Retry Button -->
-  <div id="end">
-    <button id="retry">Retry</button>
+  <!-- ── Full Leaderboard overlay ── -->
+  <div id="leaderboard-overlay" style="display:none">
+    <div class="lb-panel">
+      <h2 id="lb-title" class="lb-title"></h2>
+      <ol id="lb-list" class="lb-list"></ol>
+      <button id="lb-close-btn" class="btn-lb-close"></button>
+    </div>
   </div>
 
-  <!-- Credit -->
-  <div class="sign">
-    by Dannz / <a href="https://github.com/dannz510" target="_blank">GitHub.com</a>
+  <!-- ── How to play overlay ── -->
+  <div id="howto-overlay" style="display:none">
+    <div class="howto-panel">
+      <h2 id="howto-title" class="howto-title"></h2>
+      <div class="howto-content">
+        <div class="howto-row">
+          <span class="howto-keys">↑ ↓ ← →</span>
+          <span class="howto-desc" id="howto-move"></span>
+        </div>
+        <div class="howto-row">
+          <span class="howto-keys">WASD</span>
+          <span class="howto-desc" id="howto-alt"></span>
+        </div>
+        <div class="howto-row howto-touch-row">
+          <span class="howto-keys">👆</span>
+          <span class="howto-desc" id="howto-touch"></span>
+        </div>
+        <div class="howto-divider"></div>
+        <div class="howto-objective" id="howto-objective"></div>
+      </div>
+      <button id="howto-close-btn" class="btn-howto-close"></button>
+    </div>
   </div>
 
-  <!-- Your Custom Script -->
-  <script src="script.js"></script>
+  <!-- ── Game Over overlay ── -->
+  <div id="end" style="display:none">
+    <div class="go-panel">
+      <h2 id="go-title" class="go-title"></h2>
+      <p id="go-score"  class="go-score"></p>
+      <p id="go-record" class="go-record"></p>
+      <p id="go-new-record" class="go-new-record" style="display:none"></p>
+
+      <div class="go-buttons">
+        <button id="retry-btn" class="btn-retry"></button>
+        <button id="menu-btn"  class="btn-menu"></button>
+      </div>
+
+      <p id="go-sura-msg" class="go-sura-msg" style="display:none"></p>
+    </div>
+  </div>
+
+  <!-- ── SURA Points popup ── -->
+  <div id="sura-popup" style="display:none">
+    <div class="popup-card">
+      <p  id="popup-title"  class="popup-title"></p>
+      <p  id="popup-points" class="popup-points"></p>
+      <p  id="popup-hint"   class="popup-hint"></p>
+      <button id="popup-btn" class="btn-popup"></button>
+    </div>
+  </div>
+
+  <!-- ── Pause button (visible while playing) ── -->
+  <button id="pause-btn" style="display:none">⏸</button>
+
+  <!-- ── Music mute toggle (always visible) ── -->
+  <button id="mute-btn" aria-label="Music on/off">🔊</button>
+
+  <!-- ── Pause overlay ── -->
+  <div id="pause-overlay" style="display:none">
+    <div class="pause-panel">
+      <h2 id="pause-title" class="pause-title">PAUSA</h2>
+      <div class="pause-buttons">
+        <button id="resume-btn" class="btn-resume">CONTINUAR</button>
+        <button id="pause-menu-btn" class="btn-pause-menu">MENÚ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Portrait overlay ── -->
+  <div id="rotate-msg">
+    <div id="rotate-icon">↻</div>
+    <p>Girá el dispositivo<br>para jugar</p>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

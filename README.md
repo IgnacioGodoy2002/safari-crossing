@@ -1,66 +1,38 @@
-# Crossy_road 🛣️🐤
+# Safari Crossing
 
-Jump, dodge, and navigate your way across busy roads and treacherous rivers in this web-based recreation of the classic "Crossy Road" style game!
+Juego de arcade web desarrollado por Ignacio Godoy para SURA Gaming.
 
----
-
-## About
-
-"Crossy_road" is a public repository created by dannz510, offering a simplified, yet engaging, version of the popular arcade-style game. This project demonstrates foundational concepts in game development using front-end web technologies, providing a fun and interactive experience directly in the browser.
+Cruzá la sabana esquivando autos, camiones y trenes. Coleccioná monedas en el camino y conseguí la mayor cantidad de metros posibles.
 
 ---
 
-## Features
+## Características
 
-* **Classic Gameplay:** Guide a character across lanes of moving obstacles.
-* **Web-Based:** Play directly in your browser without any installations.
-* **Simple Controls:** Easy to learn and play, focusing on quick reflexes.
-
----
-
-## Technologies Used
-
-* **JavaScript:** The primary language responsible for all game logic, including character movement, obstacle generation, collision detection, and scorekeeping.
-* **HTML:** Provides the structural foundation for the game canvas and user interface elements.
-* **CSS:** Styles the game environment, characters, and obstacles, contributing to the visual appeal of the game.
+- Gameplay arcade estilo Crossy Road adaptado a temática safari
+- Monedas coleccionables que suman al puntaje
+- Sistema de puntos SURA: cada 100 metros = 50 SURA Points
+- Tabla de récords con top 3 en el menú principal
+- Soporte multilenguaje: español, inglés y portugués
+- Integración con plataforma SURA Gaming
+- Diseño responsive para mobile y desktop
 
 ---
 
-## Files
+## Tecnologías
 
-The key files in this repository include:
-
-* `index.html`: The main entry point for the game, setting up the game canvas and overall page structure.
-* `script.js`: Contains all the JavaScript code for the game's mechanics, animations, and user interaction.
-* `style.css`: Defines the visual styles for the game elements, ensuring a polished look.
-* `LICENSE`: Details the project's MIT License.
-* `README.md`: This file, providing an overview of the project.
+- **TypeScript** — lógica del juego
+- **Three.js** — gráficos 3D voxel
+- **Vite** — bundler y dev server
 
 ---
 
-## Getting Started
+## Desarrollo
 
-To play the "Crossy_road" game locally, follow these straightforward steps:
+```bash
+npm install
+npm run dev
+```
 
-1.  **Clone the repository:**
-    ```bash
-    git clone [https://github.com/dannz510/Crossy_road.git](https://github.com/dannz510/Crossy_road.git)
-    ```
-2.  **Navigate into the project directory:**
-    ```bash
-    cd Crossy_road
-    ```
-3.  **Open the game:**
-    Open the `index.html` file in your preferred web browser.
-
----
-
-## License
-
-This project is open-source and licensed under the [MIT License](https://github.com/dannz510/Crossy_road/blob/main/LICENSE). Feel free to explore, modify, and distribute it for your own purposes.
-
----
-
-## Repository Link
-
-You can find the "Crossy_road" project on GitHub here: [Crossy_road GitHub Repository](https://github.com/dannz510/Crossy_road)
+```bash
+npm run build
+```
