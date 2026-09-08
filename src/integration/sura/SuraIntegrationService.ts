@@ -7,23 +7,24 @@ import {
   type SuraServiceListener,
   type SuraSessionContext,
 } from "./SuraTypes";
-import { SURA_CONFIG } from "./SuraRuntimeConfig";
+import { SURA_CONFIG, GAME_SLUG } from "./SuraRuntimeConfig";
 import { SuraBridge } from "./SuraBridge";
+import { RecordsService } from "../../services/RecordsService";
 
 // ─── State machine (parent-submit flow) ──────────────────────────────────────
 //
 // disabled        → (standalone — no bridge, no transitions)
-// waiting-context → ready        (received valid SURA_MINIGAME_INIT)
-// ready           → playing      (startGameSession called — STARTED sent)
-// playing         → completed    (completeGameSession called — COMPLETED sent)
-// completed       → ready        (new SURA_MINIGAME_INIT received)
+// waiting-context → ready        (received valid INIT_GAME)
+// ready           → playing      (startGameSession called — MINIGAME_STARTED sent)
+// playing         → completed    (completeGameSession called — GAME_COMPLETE sent)
+// completed       → ready        (new INIT_GAME received, or requestFreshSession())
 // waiting-context
 //   | ready
 //   | completed    → error       (invalid INIT payload received)
 //
 // Parent-submit model: the game communicates ONLY via postMessage.
 // No HTTP calls are made from the game. Score persistence is handled
-// by the SURA host after it receives MINIGAME_COMPLETED.
+// by the SURA host after it receives GAME_COMPLETE.
 
 // ─── Singleton ────────────────────────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ export function initSuraService(): SuraIntegrationService {
 export function getSuraService(): SuraIntegrationService {
   if (!_instance) {
     throw new Error(
-      "[SURA] SuraIntegrationService not initialised. Call initSuraService() first (from BootScene).",
+      "[SURA] SuraIntegrationService not initialised. Call initSuraService() first (from main.ts).",
     );
   }
   return _instance;
@@ -67,10 +68,32 @@ export class SuraIntegrationService {
     return this.state;
   }
 
+  /** Correlation hash from the host's INIT_GAME — NOT a bearer token, never sent as one. */
+  getSessionToken(): string | null {
+    return this.context?.token ?? null;
+  }
+
+  /** The player's own display name, as sent by the host. */
+  getNickname(): string | null {
+    return this.context?.nickname ?? null;
+  }
+
+  /** The mini-game's backend UUID, from INIT_GAME — null until the handshake completes. */
+  getGameId(): string | null {
+    return this.context?.gameId || null;
+  }
+
+  /** Base URL for the (public) leaderboard fetch, from INIT_GAME — null until the handshake completes. */
+  getApiBaseUrl(): string | null {
+    return this.context?.apiBaseUrl || null;
+  }
+
   /**
-   * Called once from BootScene after Phaser initialises.
-   * Attaches the postMessage bridge and notifies the host that the game
-   * is ready to receive a session context.
+   * Called once from main.ts. Attaches the postMessage bridge and notifies
+   * the host that the game is ready to receive a session context.
+   *
+   * Must run as early as possible — the host's INIT_GAME can arrive as soon
+   * as the iframe's own `load` event fires.
    */
   initialize(): void {
     if (this.initialised || SURA_CONFIG.mode === "standalone") return;
@@ -81,8 +104,29 @@ export class SuraIntegrationService {
   }
 
   /**
+   * Asks the host for a new session by re-sending MINIGAME_READY — the same
+   * message that opens the handshake the first time. Per the host's
+   * contract, it re-sends INIT_GAME "when it receives your MINIGAME_READY",
+   * so this is also how a *second* session gets requested.
+   *
+   * Needed because after GAME_COMPLETE the state is "completed" and nothing
+   * else moves it back to "ready": the menu gates JUGAR on
+   * `state === "ready"`, so without this, returning to the menu after
+   * finishing a run leaves JUGAR permanently disabled.
+   *
+   * No-op outside the states where asking again makes sense.
+   */
+  requestFreshSession(): void {
+    if (SURA_CONFIG.mode === "standalone") return;
+    const resettable: SuraIntegrationState[] = ["completed", "error", "unauthorized"];
+    if (!resettable.includes(this.state)) return;
+
+    this.setState("waiting-context");
+    this.notifyReady();
+  }
+
+  /**
    * Subscribe to service events (state changes, host pause/resume).
-   * Scenes should unsubscribe on their SHUTDOWN event.
    */
   subscribe(listener: SuraServiceListener): void {
     this.subscribers.add(listener);
@@ -93,8 +137,6 @@ export class SuraIntegrationService {
   }
 
   /**
-   * Called from MenuScene before transitioning to GameScene.
-   *
    * Standalone: returns true immediately.
    * SURA (parent-submit): sends MINIGAME_STARTED, transitions to "playing".
    */
@@ -105,46 +147,37 @@ export class SuraIntegrationService {
 
     this.setState("playing");
     this.bridge.sendToParent(SURA_MSG.STARTED, {
-      session_id: this.context.sessionId,
-      game_id:    this.context.gameId,
+      sessionId: this.context.sessionId,
+      gameId:    this.context.gameId,
     });
     return true;
   }
 
   /**
-   * Called from GameOverScene to report the game result.
+   * Called after game over to report the result.
    *
-   * SURA (parent-submit): sends MINIGAME_COMPLETED via postMessage.
-   * The host receives the score and is responsible for persisting it.
-   * No HTTP calls are made from the game.
+   * SURA (parent-submit): sends the flat GAME_COMPLETE message via
+   * postMessage. The host receives the score and is responsible for
+   * persisting it. No HTTP calls are made from the game. The flat contract
+   * has no room for isNewRecord/estimatedSuraPoints/etc — those exist only
+   * for local UI, they don't survive onto the wire.
    */
   async completeGameSession(result: GameResult): Promise<void> {
     if (SURA_CONFIG.mode === "standalone") return;
     if (this.state !== "playing") return;
     if (!this.context) return;
 
-    this.bridge.sendToParent(SURA_MSG.COMPLETED, {
-      session_id:   this.context.sessionId,
-      game_id:      this.context.gameId,
-      score:        result.score,
-      player_alias: this.context.nickname ?? null,
-      stats: {
-        level:               result.level,
-        survivedMs:          result.survivedMs,
-        meteorsDestroyed:    result.meteorsDestroyed,
-        isNewRecord:         result.isNewRecord,
-        // Local reward preview — SURA backend is the authority on actual points.
-        estimatedSuraPoints: result.estimatedSuraPoints,
-        rewardScoreUnit:     result.rewardScoreUnit,
-        rewardPointsPerUnit: result.rewardPointsPerUnit,
-      },
+    this.bridge.sendCompletion({
+      sessionId:  this.context.sessionId,
+      score:      result.score,
+      provider:   GAME_SLUG,
+      durationMs: result.durationMs,
     });
     this.setState("completed");
   }
 
   /**
    * Ask the parent (SURA app) to close the minigame iframe.
-   * Used in real "sura" mode by the "VOLVER A SURA" button.
    */
   requestExit(): void {
     if (SURA_CONFIG.mode !== "sura") return;
@@ -165,12 +198,13 @@ export class SuraIntegrationService {
     this.bridge.on(SURA_MSG.RESUME, ()    => this.handleHostResume());
   }
 
+  /**
+   * MINIGAME_READY has to go out before the host's origin is known (that's
+   * derived from the host's own INIT_GAME, which hasn't arrived yet) — the
+   * bridge always sends it with target "*".
+   */
   private notifyReady(): void {
-    if (!SURA_CONFIG.isEmbedded) return;
-    this.bridge.sendToParent(SURA_MSG.READY, {
-      game_id: SURA_CONFIG.gameId,
-      version: SURA_CONFIG.gameVersion,
-    });
+    this.bridge.sendReady({ game_id: GAME_SLUG, version: SURA_CONFIG.gameVersion });
   }
 
   private handleInit(payload: Record<string, unknown>): void {
@@ -179,32 +213,43 @@ export class SuraIntegrationService {
     ];
     if (!resettable.includes(this.state)) return;
 
-    // Validate required INIT fields.
+    // Validate required INIT fields. Real contract: camelCase, no player_id
+    // (the host identifies the player from the session token itself).
+    // gameId/apiBaseUrl/bestScore are optional so an older host that hasn't
+    // rolled them out yet doesn't hard-fail the handshake.
     const p = payload as Partial<InitPayload>;
-    const token      = typeof p.token      === "string" ? p.token      : null;
-    const session_id = typeof p.session_id === "string" ? p.session_id : null;
-    const player_id  = typeof p.player_id  === "number" ? p.player_id  : null;
-    const game_id    = typeof p.game_id    === "string" ? p.game_id    : null;
+    const token     = typeof p.token     === "string" ? p.token     : null;
+    const sessionId = typeof p.sessionId === "string" ? p.sessionId : null;
 
-    if (!token || !session_id || player_id === null || !game_id) {
+    if (!token || !sessionId) {
       this.setState("error");
-      this.bridge.sendToParent(SURA_MSG.ERROR, { message: "Invalid SURA_MINIGAME_INIT payload." });
+      this.bridge.sendToParent(SURA_MSG.ERROR, { message: "Invalid INIT_GAME payload." });
       return;
     }
 
     // Store context in memory only — never logged, never persisted.
     this.context = {
       token,
-      sessionId: session_id,
-      playerId:  player_id,
-      gameId:    game_id,
-      nickname:  typeof p.nickname === "string" ? p.nickname : undefined,
+      sessionId,
+      gameId:     typeof p.gameId     === "string" ? p.gameId     : GAME_SLUG,
+      apiBaseUrl: typeof p.apiBaseUrl === "string" ? p.apiBaseUrl : "",
+      nickname:   typeof p.username   === "string" ? p.username   : undefined,
+      bestScore:  typeof p.bestScore  === "number" ? p.bestScore  : undefined,
     };
+
+    // Reconcile the local (per-device) record against the account's real
+    // best score. Only ever raises it, never lowers it — a missing/stale/
+    // zero remote value (older host not rolled out yet, no runs for this
+    // account yet) must not erase a real local win that hasn't round-
+    // tripped to the backend yet.
+    if (this.context.bestScore !== undefined) {
+      RecordsService.saveBest(this.context.bestScore);
+    }
 
     // Acknowledge receipt of the context.
     this.bridge.sendToParent(SURA_MSG.SESSION_ACCEPTED, {
-      session_id,
-      game_id,
+      sessionId,
+      gameId: this.context.gameId,
     });
 
     // parent-submit: context is trusted as-is — no backend validation needed.

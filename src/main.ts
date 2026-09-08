@@ -67,6 +67,7 @@ type AppState = "menu" | "playing" | "paused" | "gameover";
 let appState: AppState = "menu";
 let game: Game | null = null;
 let currentScore = 0;
+let playStartedAt = 0;
 
 const sura = initSuraService();
 
@@ -196,6 +197,13 @@ function showMenu(): void {
   menuEl.style.display          = "flex";
   counterEl.style.display       = "none";
   pauseBtn.style.display        = "none";
+
+  // Without this, JUGAR stays disabled forever after the first run: once
+  // completeGameSession() moves the state to "completed", nothing else asks
+  // the host for a fresh session. Re-sending MINIGAME_READY here mirrors
+  // Pengu Rush / Coin Kingdom, whose host contract re-sends INIT_GAME upon
+  // receiving it.
+  sura.requestFreshSession();
 }
 
 function refreshSuraStatus(state: SuraIntegrationState): void {
@@ -281,6 +289,7 @@ async function startGame(): Promise<void> {
   if (!ok && SURA_CONFIG.mode !== "standalone") return;
 
   appState = "playing";
+  playStartedAt = Date.now();
   menuEl.style.display       = "none";
   gameoverEl.style.display   = "none";
   pauseOverlay.style.display = "none";
@@ -326,6 +335,7 @@ async function handleGameOver(score: number): Promise<void> {
     estimatedSuraPoints: suraPoints,
     rewardScoreUnit:     LOCAL_SURA_REWARD_CONFIG.scoreUnit,
     rewardPointsPerUnit: LOCAL_SURA_REWARD_CONFIG.pointsPerUnit,
+    durationMs:          playStartedAt ? Date.now() - playStartedAt : undefined,
   });
 
   goTitle.textContent   = t("gameover_title");

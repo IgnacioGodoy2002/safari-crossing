@@ -1,51 +1,45 @@
 import type { IntegrationMode } from "./SuraTypes";
 
-const PROVISIONAL_GAME_ID      = "crossy_road";
-const PROVISIONAL_GAME_VERSION = "1.0.0";
+const GAME_SLUG    = "safari_crossing";
+const GAME_VERSION = "1.0.0";
 
 export type SuraConfig = {
-  readonly mode:          IntegrationMode;
-  readonly gameId:        string;
-  readonly gameVersion:   string;
-  readonly parentOrigin:  string;
-  readonly apiBaseUrl:    string;
-  readonly isEmbedded:    boolean;
-  readonly isDev:         boolean;
+  readonly mode:        IntegrationMode;
+  readonly gameVersion: string;
+  readonly isEmbedded:  boolean;
+  readonly isDev:       boolean;
 };
 
+/**
+ * Mode, parentOrigin, gameId and apiBaseUrl used to be decided at build time
+ * via VITE_SURA_* env vars — one build per environment, and no answer at all
+ * for the native app's WebView (no host origin to hardcode).
+ *
+ * Now only `isEmbedded` is a build-independent runtime fact, checked once at
+ * load. Everything else (parentOrigin, gameId, apiBaseUrl) comes from the
+ * host's own INIT_GAME payload — see SuraIntegrationService.handleInit and
+ * SuraBridge's dynamic parentOrigin capture. One build works everywhere
+ * (matches Pengu Rush / Coin Kingdom / Joystick Pop).
+ */
 function buildConfig(): SuraConfig {
-  const isDev      = import.meta.env.DEV as boolean;
-  const isEmbedded = window.parent !== window;
+  const nativeWebView = (window as unknown as { ReactNativeWebView?: unknown }).ReactNativeWebView;
+  const isEmbedded = window.parent !== window || Boolean(nativeWebView);
 
-  const gameId      = (import.meta.env.VITE_SURA_GAME_ID       as string | undefined) ?? PROVISIONAL_GAME_ID;
-  const gameVersion = (import.meta.env.VITE_SURA_GAME_VERSION  as string | undefined) ?? PROVISIONAL_GAME_VERSION;
-  const envOrigin   = (import.meta.env.VITE_SURA_PARENT_ORIGIN as string | undefined) ?? "";
-  const envBaseUrl  = (import.meta.env.VITE_SURA_API_BASE_URL  as string | undefined) ?? "";
+  // Never standalone while embedded — an iframe or native WebView is always
+  // a real host, whether or not this happens to be a dev build.
+  const mode: IntegrationMode = isEmbedded ? "sura" : "standalone";
 
-  let mode: IntegrationMode;
-
-  if (!isDev) {
-    const envMode = import.meta.env.VITE_SURA_INTEGRATION_MODE as string | undefined;
-    mode = envMode === "sura" ? "sura" : "standalone";
-  } else {
-    const params = new URLSearchParams(window.location.search);
-    mode = params.get("sura_mode") === "mock" ? "sura-mock" : "standalone";
-  }
-
-  let parentOrigin = envOrigin;
-  if (mode === "sura-mock" && !parentOrigin) {
-    parentOrigin = window.location.origin;
-  }
-
-  if (mode === "sura" && !parentOrigin) {
-    console.error(
-      "[SuraRuntimeConfig] VITE_SURA_PARENT_ORIGIN is required when " +
-      "VITE_SURA_INTEGRATION_MODE=sura. Falling back to standalone mode.",
-    );
-    mode = "standalone";
-  }
-
-  return { mode, gameId, gameVersion, parentOrigin, apiBaseUrl: envBaseUrl, isEmbedded, isDev };
+  return {
+    mode,
+    gameVersion: GAME_VERSION,
+    isEmbedded,
+    isDev: import.meta.env.DEV as boolean,
+  };
 }
 
+// Singleton — built once at module load time.
 export const SURA_CONFIG: SuraConfig = buildConfig();
+
+// Self-announced in MINIGAME_READY, before the host's INIT_GAME (and its real
+// backend UUID) has arrived. Purely informational on the host's side.
+export { GAME_SLUG };

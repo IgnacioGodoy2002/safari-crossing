@@ -24,45 +24,56 @@ export type ApiPagination = {
 };
 
 // ─── Integration modes ────────────────────────────────────────────────────────
+//
+// Decided at runtime from window.parent/ReactNativeWebView (SuraRuntimeConfig),
+// never at build time — "sura-mock" doesn't exist anymore, since embedding the
+// game (even in a local dev iframe) is now indistinguishable at runtime from
+// the real host.
 
-export type IntegrationMode = "standalone" | "sura-mock" | "sura";
+export type IntegrationMode = "standalone" | "sura";
 
 // ─── Integration state machine ────────────────────────────────────────────────
 
 export type SuraIntegrationState =
   | "disabled"           // standalone — no bridge, no transitions
-  | "waiting-context"    // sura/mock  — waiting for SURA_MINIGAME_INIT
-  | "validating"         // received INIT, calling validateSession
-  | "ready"              // session valid, waiting for JUGAR
-  | "starting"           // startGameSession called, awaiting response
-  | "playing"            // session started, game running
-  | "completing"         // completeGameSession called, awaiting response
-  | "completed"          // result sent, waiting for new INIT or exit
-  | "unauthorized"       // 401/403 from validateSession or startSession
-  | "error";             // network error or unexpected server failure
+  | "waiting-context"    // sura — waiting for INIT_GAME
+  | "validating"
+  | "ready"              // context received, waiting for JUGAR
+  | "starting"
+  | "playing"
+  | "completing"
+  | "completed"
+  | "unauthorized"
+  | "error";
 
-// ─── Session context (camelCase internally; snake_case in postMessage) ────────
+// ─── Session context ────────────────────────────────────────────────────────
+//
+// Entirely populated from the host's INIT_GAME payload — gameId and
+// apiBaseUrl included, so nothing here depends on how this build was
+// compiled or which environment it's running in.
 
 export type SuraSessionContext = {
   token:      string;
   sessionId:  string;
-  playerId:   number;
   gameId:     string;
+  apiBaseUrl: string;
   nickname?:  string;
+  bestScore?: number;
 };
 
 // ─── Game result ──────────────────────────────────────────────────────────────
 
 export type GameResult = {
   score:               number;
-  level?:              number;
-  survivedMs?:         number;
-  meteorsDestroyed?:   number;
   isNewRecord?:        boolean;
   // Local reward preview — SURA backend is the authority on actual points.
   estimatedSuraPoints?: number;
   rewardScoreUnit?:    number;
   rewardPointsPerUnit?: number;
+  // Wall-clock session length — lets sura-api's anti-cheat bound score
+  // against elapsed time. Optional: absent in standalone mode or if the
+  // run's start timestamp was never captured.
+  durationMs?:         number;
 };
 
 // ─── API response data shapes (provisional — subject to change by SURA) ───────
@@ -87,19 +98,20 @@ export type CompletedSession = {
 
 // ─── postMessage event names ──────────────────────────────────────────────────
 //
-// PROVISIONAL — names have NOT been confirmed by SURA.
+// Confirmed against the real host contract in sura-universal (same contract
+// already applied to Pengu Rush / Coin Kingdom / Joystick Pop).
 // All event strings are centralised here. Do NOT reference raw strings anywhere.
 
 export const SURA_MSG = {
-  // Host (SURA app) → game (iframe)
-  INIT:             "SURA_MINIGAME_INIT",
+  // Host (SURA app) → game (iframe / WebView)
+  INIT:             "INIT_GAME",
   PAUSE:            "SURA_MINIGAME_PAUSE",
   RESUME:           "SURA_MINIGAME_RESUME",
-  // Game (iframe) → host (SURA app)
+  // Game (iframe / WebView) → host (SURA app)
   READY:            "MINIGAME_READY",
   SESSION_ACCEPTED: "MINIGAME_SESSION_ACCEPTED",
   STARTED:          "MINIGAME_STARTED",
-  COMPLETED:        "MINIGAME_COMPLETED",
+  COMPLETED:        "GAME_COMPLETE",
   ERROR:            "MINIGAME_ERROR",
   EXIT_REQUESTED:   "MINIGAME_EXIT_REQUESTED",
 } as const;
@@ -107,22 +119,33 @@ export const SURA_MSG = {
 export type SuraMsgType = typeof SURA_MSG[keyof typeof SURA_MSG];
 
 // ─── postMessage envelope ─────────────────────────────────────────────────────
+//
+// Only inbound host → game messages use this { type, payload } shape. The
+// outbound completion message to the host is flat (see SuraBridge.sendCompletion).
 
 export type SuraEnvelope = {
-  source:  "sura-minigames";
-  version: 1;
   type:    SuraMsgType;
   payload: Record<string, unknown>;
 };
 
-// ─── Inbound payload for SURA_MINIGAME_INIT ───────────────────────────────────
+// ─── Inbound payload for INIT_GAME ─────────────────────────────────────────────
+//
+// gameId and apiBaseUrl are what let one build run in every environment
+// (including the native app, which has no build-time host origin to
+// hardcode) — without them the game has no way to know which mini-game UUID
+// or API to call for the leaderboard.
 
 export type InitPayload = {
-  token:      string;
-  session_id: string;
-  player_id:  number;
-  game_id:    string;
-  nickname?:  string;
+  token:               string;
+  sessionId:           string;
+  username?:           string;
+  referral?:           string;
+  referredByNickname?: string;
+  gameId?:             string;
+  apiBaseUrl?:         string;
+  // The player's own real best score, from sura-api — not the game's own
+  // localStorage, which is per-device and never synced to the account.
+  bestScore?:          number;
 };
 
 // ─── Events emitted by SuraIntegrationService to scene subscribers ────────────

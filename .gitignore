@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# Delivery artifacts — built locally for handoff, never versioned
+safari-crossing-build-*.zip
+BUILD_INFO.txt
