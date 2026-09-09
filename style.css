@@ -816,6 +816,7 @@ canvas {
   0%, 100% { transform: rotate(0deg); }
   45%, 55%  { transform: rotate(90deg); }
 }
-@media (max-width: 900px) and (orientation: portrait) {
-  #rotate-msg { display: flex; }
-}
+/* Shown/hidden from main.ts, not from CSS alone: a narrow-but-tall *desktop*
+   window (e.g. the SURA app embedding the game in a portrait-shaped iframe
+   on PC) matches "narrow + portrait" too, but there's no device to rotate —
+   toggling this off pure viewport shape would wrongly block desktop users. */

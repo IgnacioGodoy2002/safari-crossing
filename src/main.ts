@@ -19,6 +19,7 @@ const pauseOverlay   = document.getElementById("pause-overlay")!;
 const resumeBtn      = document.getElementById("resume-btn")!;
 const pauseMenuBtn   = document.getElementById("pause-menu-btn")!;
 const muteBtn        = document.getElementById("mute-btn") as HTMLButtonElement;
+const rotateMsg      = document.getElementById("rotate-msg")!;
 
 // menu
 const menuRecordVal    = document.getElementById("menu-record-val");
@@ -460,6 +461,29 @@ function beginMusicOnFirstInteraction(): void {
 }
 document.addEventListener("pointerdown", beginMusicOnFirstInteraction);
 document.addEventListener("keydown", beginMusicOnFirstInteraction);
+
+// ─── Rotate-device overlay ─────────────────────────────────────────────────────
+//
+// Only real touch/mobile devices can be rotated — a desktop window (or the
+// SURA host embedding the game in a narrow, portrait-shaped iframe/panel on
+// PC) can be just as narrow-and-tall as a phone in portrait, but there's no
+// device to turn. Gate on the actual input/device type, not just the
+// viewport's aspect ratio, so desktop never gets stuck behind this overlay.
+
+function isMobileDevice(): boolean {
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
+  const mobileUA = /Android|iPhone|iPad|iPod|Mobile|Windows Phone/i.test(navigator.userAgent);
+  return coarsePointer || mobileUA;
+}
+
+function updateRotateOverlay(): void {
+  const isPortrait = window.innerWidth < window.innerHeight;
+  rotateMsg.style.display = isMobileDevice() && isPortrait ? "flex" : "none";
+}
+
+window.addEventListener("resize", updateRotateOverlay);
+window.matchMedia("(orientation: portrait)").addEventListener("change", updateRotateOverlay);
+updateRotateOverlay();
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
