@@ -2,6 +2,7 @@ import { Game } from "./game/Game";
 import { SoundManager } from "./game/SoundManager";
 import { MusicManager } from "./game/MusicManager";
 import { RecordsService } from "./services/RecordsService";
+import { fetchLeaderboard, type LeaderboardEntry } from "./services/LeaderboardService";
 import { initSuraService } from "./integration/sura/SuraIntegrationService";
 import { SURA_CONFIG } from "./integration/sura/SuraRuntimeConfig";
 import { calcSuraPoints, LOCAL_SURA_REWARD_CONFIG } from "./config/suraRewardConfig";
@@ -80,6 +81,13 @@ sura.subscribe(event => {
       goSuraMsg.textContent = t("gameover_sura_sent");
       goSuraMsg.className = "go-sura-msg go-sura-msg--ok";
     }
+    // The very first render of the menu happens before the host's INIT_GAME
+    // round-trip completes, so it falls back to the local board. Once the
+    // handshake finishes (gameId/apiBaseUrl now known), refresh so the real
+    // leaderboard replaces it without needing a reload or language toggle.
+    if (event.state === "ready" && appState === "menu") {
+      void refreshTop3();
+    }
   }
 });
 
@@ -114,7 +122,7 @@ function applyLang(): void {
     ? "Cruze o máximo de ruas sem ser atropelado por carros ou trens!"
     : "¡Cruzá la mayor cantidad de calles sin ser atropellado por autos o trenes!";
 
-  refreshTop3();
+  void refreshTop3();
   langChips.forEach(chip => {
     chip.setAttribute("aria-pressed", chip.dataset.lang === getLang() ? "true" : "false");
   });
@@ -131,52 +139,57 @@ langChips.forEach(chip => {
 
 const MEDALS = ["🥇", "🥈", "🥉"];
 
-function refreshTop3(): void {
-  const entries = RecordsService.getLeaderboard().slice(0, 3);
-  menuTop3List.innerHTML = "";
+// Bumped on every refreshTop3/renderLeaderboard call so a slow fetch that
+// resolves after a newer one started doesn't clobber the freshest result.
+let top3Token = 0;
+let lbToken   = 0;
 
-  if (entries.length === 0) {
-    const empty = document.createElement("li");
-    empty.className = "top3-empty";
-    empty.textContent = t("menu_no_records");
-    menuTop3List.appendChild(empty);
-    return;
-  }
+async function refreshTop3(): Promise<void> {
+  const token = ++top3Token;
+  const entries = (await fetchLeaderboard()).slice(0, 3);
+  if (token !== top3Token) return;
 
-  entries.forEach((entry, i) => {
-    const li = document.createElement("li");
-    li.className = "top3-item";
-    li.innerHTML = `
-      <span class="top3-medal">${MEDALS[i] ?? ""}</span>
-      <span class="top3-name">${escapeHtml(entry.name)}</span>
-      <span class="top3-score">${entry.score}</span>
-    `;
-    menuTop3List.appendChild(li);
-  });
+  renderEntries(menuTop3List, entries, "top3-item", "top3-medal", "top3-name", "top3-score");
 }
 
-function renderLeaderboard(): void {
-  const entries = RecordsService.getLeaderboard();
-  lbList.innerHTML = "";
+async function renderLeaderboard(): Promise<void> {
+  const token = ++lbToken;
+  lbList.innerHTML = `<li class="top3-empty">${escapeHtml(t("leaderboard_loading"))}</li>`;
+  const entries = await fetchLeaderboard();
+  if (token !== lbToken) return;
+
+  renderEntries(lbList, entries, "lb-item", "lb-medal", "lb-name", "lb-score", true);
+}
+
+function renderEntries(
+  list:      HTMLElement,
+  entries:   LeaderboardEntry[],
+  itemClass: string,
+  medalClass: string,
+  nameClass:  string,
+  scoreClass: string,
+  showPos = false,
+): void {
+  list.innerHTML = "";
 
   if (entries.length === 0) {
     const empty = document.createElement("li");
     empty.className = "top3-empty";
     empty.textContent = t("menu_no_records");
-    lbList.appendChild(empty);
+    list.appendChild(empty);
     return;
   }
 
   entries.forEach((entry, i) => {
     const li = document.createElement("li");
-    li.className = "lb-item";
+    li.className = itemClass + (entry.isCurrentPlayer ? ` ${itemClass}--me` : "");
     li.innerHTML = `
-      <span class="lb-medal">${MEDALS[i] ?? ""}</span>
-      <span class="lb-pos">${i < 3 ? "" : `#${i + 1}`}</span>
-      <span class="lb-name">${escapeHtml(entry.name)}</span>
-      <span class="lb-score">${entry.score}</span>
+      <span class="${medalClass}">${MEDALS[i] ?? ""}</span>
+      ${showPos ? `<span class="lb-pos">${i < 3 ? "" : `#${i + 1}`}</span>` : ""}
+      <span class="${nameClass}">${escapeHtml(entry.alias)}</span>
+      <span class="${scoreClass}">${entry.score}</span>
     `;
-    lbList.appendChild(li);
+    list.appendChild(li);
   });
 }
 
@@ -254,7 +267,7 @@ function refreshSuraStatus(state: SuraIntegrationState): void {
 // ─── Leaderboard overlay ──────────────────────────────────────────────────────
 
 btnRanking.addEventListener("click", () => {
-  renderLeaderboard();
+  void renderLeaderboard();
   lbOverlay.style.display = "flex";
 });
 

@@ -12,6 +12,7 @@ export const en: Locale = {
   menu_no_records:     "No records yet",
   leaderboard_title:   "LEADERBOARD",
   leaderboard_close:   "CLOSE",
+  leaderboard_loading: "Loading...",
   leaderboard_pos:     "#",
   howto_title:         "HOW TO PLAY",
   howto_close:         "GOT IT!",

@@ -11,6 +11,7 @@ export type Locale = {
   leaderboard_title:   string;
   leaderboard_close:   string;
   leaderboard_pos:     string;
+  leaderboard_loading: string;
   howto_title:         string;
   howto_close:         string;
   sura_waiting:        string;
@@ -51,6 +52,7 @@ export const es: Locale = {
   menu_no_records:     "Aún no hay récords",
   leaderboard_title:   "TABLA DE RÉCORDS",
   leaderboard_close:   "CERRAR",
+  leaderboard_loading: "Cargando...",
   leaderboard_pos:     "#",
   howto_title:         "CÓMO JUGAR",
   howto_close:         "¡ENTENDIDO!",
