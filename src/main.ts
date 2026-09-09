@@ -7,7 +7,7 @@ import { initSuraService } from "./integration/sura/SuraIntegrationService";
 import { SURA_CONFIG } from "./integration/sura/SuraRuntimeConfig";
 import { calcSuraPoints, LOCAL_SURA_REWARD_CONFIG } from "./config/suraRewardConfig";
 import { t, setLang, getLang, type LangCode } from "./i18n";
-import type { SuraIntegrationState } from "./integration/sura/SuraTypes";
+import type { SuraIntegrationState, SuraServiceEvent } from "./integration/sura/SuraTypes";
 
 // ─── DOM refs ─────────────────────────────────────────────────────────────────
 
@@ -296,8 +296,47 @@ howtoOverlay.addEventListener("click", (e) => {
 
 // ─── Play ─────────────────────────────────────────────────────────────────────
 
+// How long REINTENTAR waits for the host to grant a fresh session before
+// giving up — requestFreshSession() was already fired the moment the Game
+// Over screen appeared, so this only covers unusually slow round-trips.
+const RETRY_SESSION_TIMEOUT_MS = 4000;
+
+function waitForSuraReady(timeoutMs: number): Promise<boolean> {
+  if (sura.getState() === "ready") return Promise.resolve(true);
+
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      sura.unsubscribe(listener);
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const listener = (event: SuraServiceEvent) => {
+      if (event.type === "state-changed" && event.state === "ready") finish(true);
+    };
+    sura.subscribe(listener);
+    const timer = setTimeout(() => finish(false), timeoutMs);
+  });
+}
+
 async function startGame(): Promise<void> {
-  if (playBtn.disabled) return;
+  if (SURA_CONFIG.mode !== "standalone" && sura.getState() !== "ready") {
+    // Not ready yet — most likely REINTENTAR beat the host's response to
+    // the requestFreshSession() sent when the Game Over screen appeared.
+    // Ask again and give it a little more time instead of silently doing
+    // nothing, which just looked like the game had frozen.
+    sura.requestFreshSession();
+    const gotReady = await waitForSuraReady(RETRY_SESSION_TIMEOUT_MS);
+    if (!gotReady) {
+      // Host still hasn't granted a session — bounce to the menu (which
+      // shows the real waiting/error status) rather than leaving the
+      // player stuck on an unresponsive screen.
+      showMenu();
+      return;
+    }
+  }
 
   const ok = await sura.startGameSession();
   if (!ok && SURA_CONFIG.mode !== "standalone") return;
@@ -351,6 +390,13 @@ async function handleGameOver(score: number): Promise<void> {
     rewardPointsPerUnit: LOCAL_SURA_REWARD_CONFIG.pointsPerUnit,
     durationMs:          playStartedAt ? Date.now() - playStartedAt : undefined,
   });
+
+  // REINTENTAR skips the menu (the only other place that asks for a new
+  // session), so without this the host is never told we want another round
+  // — state stays "completed" forever and tapping REINTENTAR silently does
+  // nothing. Ask now, while the player is still reading the score, so the
+  // fresh session has time to arrive before they tap it.
+  sura.requestFreshSession();
 
   goTitle.textContent   = t("gameover_title");
   goScore.textContent   = t("gameover_score",  { score });
