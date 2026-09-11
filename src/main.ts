@@ -24,7 +24,6 @@ const rotateMsg      = document.getElementById("rotate-msg")!;
 // menu
 const menuRecordVal    = document.getElementById("menu-record-val");
 const playBtn          = document.getElementById("play-btn") as HTMLButtonElement;
-const suraStatus       = document.getElementById("sura-status")!;
 const langChips        = document.querySelectorAll<HTMLElement>("[data-lang]");
 const menuSub          = document.getElementById("menu-sub")!;
 const menuRankingLabel = document.getElementById("menu-ranking-label")!;
@@ -54,7 +53,6 @@ const goRecord     = document.getElementById("go-record")!;
 const goNewRecord  = document.getElementById("go-new-record")!;
 const retryBtn     = document.getElementById("retry-btn")!;
 const menuBtn      = document.getElementById("menu-btn")!;
-const goSuraMsg    = document.getElementById("go-sura-msg")!;
 
 // popup
 const popupEl     = document.getElementById("sura-popup")!;
@@ -78,10 +76,6 @@ const sura = initSuraService();
 sura.subscribe(event => {
   if (event.type === "state-changed") {
     refreshSuraStatus(event.state);
-    if (event.state === "completed") {
-      goSuraMsg.textContent = t("gameover_sura_sent");
-      goSuraMsg.className = "go-sura-msg go-sura-msg--ok";
-    }
     // The very first render of the menu happens before the host's INIT_GAME
     // round-trip completes, so it falls back to the local board. Once the
     // handshake finishes (gameId/apiBaseUrl now known), refresh so the real
@@ -220,49 +214,16 @@ function showMenu(): void {
   sura.requestFreshSession();
 }
 
+// No status text shown to the player (matches Pengu Rush / Coin Kingdom) —
+// "ready"/"sent" confirmations read as debug output, not something a player
+// needs. JUGAR's own dimmed/disabled look already communicates "not yet".
 function refreshSuraStatus(state: SuraIntegrationState): void {
   if (SURA_CONFIG.mode === "standalone") {
-    suraStatus.style.display = "none";
     playBtn.disabled = false;
     return;
   }
 
-  suraStatus.style.display = "block";
-  suraStatus.className = "sura-status";
-
-  switch (state) {
-    case "waiting-context":
-      suraStatus.textContent = t("sura_waiting");
-      suraStatus.classList.add("sura-status--waiting");
-      playBtn.disabled = true;
-      break;
-    case "ready":
-      suraStatus.textContent = t("sura_ready");
-      suraStatus.classList.add("sura-status--ready");
-      playBtn.disabled = false;
-      break;
-    case "playing":
-      suraStatus.textContent = t("sura_playing");
-      suraStatus.classList.add("sura-status--playing");
-      break;
-    case "completed":
-      suraStatus.textContent = t("sura_completed");
-      suraStatus.classList.add("sura-status--done");
-      playBtn.disabled = true;
-      break;
-    case "error":
-      suraStatus.textContent = t("sura_error");
-      suraStatus.classList.add("sura-status--error");
-      playBtn.disabled = true;
-      break;
-    case "unauthorized":
-      suraStatus.textContent = t("sura_unauthorized");
-      suraStatus.classList.add("sura-status--error");
-      playBtn.disabled = true;
-      break;
-    default:
-      suraStatus.textContent = "";
-  }
+  playBtn.disabled = state !== "ready";
 }
 
 // ─── Leaderboard overlay ──────────────────────────────────────────────────────
@@ -406,8 +367,6 @@ async function handleGameOver(score: number): Promise<void> {
 
   retryBtn.textContent = t("gameover_retry");
   menuBtn.textContent  = t("gameover_menu");
-
-  goSuraMsg.style.display = SURA_CONFIG.mode !== "standalone" ? "block" : "none";
 
   counterEl.style.display    = "none";
   pauseBtn.style.display     = "none";

@@ -271,20 +271,6 @@ canvas {
   transform: translateY(1px);
 }
 
-/* SURA status */
-.sura-status {
-  font-size: .42em;
-  text-align: center;
-  padding: 6px 12px;
-  border-radius: 6px;
-  letter-spacing: .04em;
-}
-.sura-status--waiting  { color: #fbbf24; background: rgba(251,191,36,.12); }
-.sura-status--ready    { color: #e8aa40; background: rgba(232,170,64,.12); }
-.sura-status--playing  { color: #93c5fd; background: rgba(147,197,253,.12); }
-.sura-status--done     { color: #e8aa40; background: rgba(232,170,64,.12); }
-.sura-status--error    { color: #fca5a5; background: rgba(252,165,165,.12); }
-
 /* Lang chips */
 .lang-chips {
   display: flex;
@@ -628,10 +614,6 @@ canvas {
 }
 .btn-menu:hover { background: rgba(140,65,10,.28); border-color: rgba(200,110,30,.8); }
 .btn-menu:active { transform: translateY(1px); }
-
-.go-sura-msg { font-size: .42em; text-align: center; padding: 4px 8px; }
-.go-sura-msg--ok  { color: #e8aa40; }
-.go-sura-msg--err { color: #fca5a5; }
 
 /* ══════════════════════════════════════════════════════════
    SURA POINTS POPUP
